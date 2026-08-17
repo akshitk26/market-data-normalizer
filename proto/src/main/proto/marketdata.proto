@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package marketdata.v1;
+
+option java_multiple_files = true;
+option java_package = "com.akshit.marketdata.proto";
+option java_outer_classname = "MarketDataProto";
+
+message MarketDataEnvelope {
+  string source_feed = 1;
+  string instrument = 2;
+  uint64 sequence_number = 3;
+  uint64 event_time_ns = 4;
+  uint64 receive_time_ns = 5;
+
+  oneof payload {
+    L2Update l2_update = 10;
+    GapDetected gap_detected = 11;
+    ReplayRequest replay_request = 12;
+    ReplayResponse replay_response = 13;
+    BookSnapshot book_snapshot = 14;
+    MetricsEvent metrics_event = 15;
+  }
+}
+
+message L2Update {
+  Side side = 1;
+  Action action = 2;
+  int64 price_nanos = 3;
+  int64 quantity_nanos = 4;
+  uint32 level = 5;
+  string order_id = 6;
+}
+
+message GapDetected {
+  uint64 expected_sequence = 1;
+  uint64 observed_sequence = 2;
+  uint64 missing_from = 3;
+  uint64 missing_to = 4;
+}
+
+message ReplayRequest {
+  string source_feed = 1;
+  string instrument = 2;
+  uint64 from_sequence = 3;
+  uint64 to_sequence = 4;
+}
+
+message ReplayResponse {
+  string source_feed = 1;
+  string instrument = 2;
+  uint64 from_sequence = 3;
+  uint64 to_sequence = 4;
+  repeated MarketDataEnvelope events = 5;
+  bool complete = 6;
+}
+
+message BookSnapshot {
+  repeated PriceLevel bids = 1;
+  repeated PriceLevel asks = 2;
+}
+
+message PriceLevel {
+  int64 price_nanos = 1;
+  int64 quantity_nanos = 2;
+  uint32 level = 3;
+}
+
+message MetricsEvent {
+  string name = 1;
+  double value = 2;
+  string unit = 3;
+}
+
+enum Side {
+  SIDE_UNSPECIFIED = 0;
+  BID = 1;
+  ASK = 2;
+}
+
+enum Action {
+  ACTION_UNSPECIFIED = 0;
+  ADD = 1;
+  MODIFY = 2;
+  DELETE = 3;
+  TRADE = 4;
+  SNAPSHOT = 5;
+}

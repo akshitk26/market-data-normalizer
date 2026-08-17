@@ -1,0 +1,4 @@
+CompileFlags:
+  CompilationDatabase: native/build
+  Add:
+    - -std=c++20
