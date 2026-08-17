@@ -135,4 +135,5 @@ The benchmark is a measurement tool, not a claim that the final target has alrea
 - [Architecture](docs/architecture.md)
 - [Data-source decisions](docs/data-sources.md)
 - [Gemini FIX live setup](docs/gemini-fix-live-setup.md)
+- [Gemini FIX onboarding request](docs/gemini-fix-onboarding-request.md)
 - [Operator and developer guide](docs/operator-guide.md)

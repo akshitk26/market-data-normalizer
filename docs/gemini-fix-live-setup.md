@@ -8,6 +8,8 @@ This is market-data access only. The application needs to establish a FIX sessio
 
 Gemini's current Logon documentation says it authenticates the institution using the source IP, `49=SenderCompID`, and `56=TargetCompID`. It documents `98=0` for no FIX-level encryption and requires `108=30` for the heartbeat interval. The transport host and port are provisioned by Gemini rather than guessed by this project.
 
+Use the [onboarding request template](gemini-fix-onboarding-request.md) when contacting Gemini.
+
 ## What you must obtain from Gemini
 
 1. Request Gemini FIX market-data access for the institution or account.
