@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
+import java.util.ArrayList;
 import java.util.stream.Collectors;
 
 final class GeminiFixMessageCodec {
@@ -62,6 +63,18 @@ final class GeminiFixMessageCodec {
             }
         }
         return null;
+    }
+
+    static List<String> fields(String message, int tag) {
+        String normalized = message.replace('|', SOH);
+        String prefix = tag + "=";
+        List<String> values = new ArrayList<>();
+        for (String field : normalized.split(String.valueOf(SOH))) {
+            if (field.startsWith(prefix)) {
+                values.add(field.substring(prefix.length()));
+            }
+        }
+        return values;
     }
 
     private static String readField(InputStream input) throws IOException {

@@ -97,6 +97,37 @@ Use [config/gemini-fix.env.example](config/gemini-fix.env.example) and [docs/gem
 
 The live adapter is market-data-only. It does not send order-entry messages. The capture is line-oriented raw FIX with pipe delimiters despite the historical `.jsonl` filename; it is not an API-key-authenticated REST flow.
 
+## Local FIX Bridge With Real Coinbase Data
+
+The local bridge is a development-only FIX acceptor. It listens on localhost, accepts the same Logon and Market Data Request flow as the FIX client, then reads real Coinbase public WebSocket messages and translates them into Gemini-shaped FIX `W` and `X` messages. No prices or sizes are generated synthetically, but this is not an actual Gemini FIX connection.
+
+Run the bridge in one terminal:
+
+```bash
+./gradlew --no-daemon :ingestion-service:runLocalFixBridge \
+  --args="9876 BTC-USD,ETH-USD 100"
+```
+
+Run the existing FIX client in a second terminal:
+
+```bash
+GEMINI_FIX_HOST=127.0.0.1 \
+GEMINI_FIX_PORT=9876 \
+GEMINI_FIX_SENDER_COMP_ID=LOCAL-CLIENT \
+GEMINI_FIX_TARGET_COMP_ID=GEMINI \
+GEMINI_FIX_TRANSPORT_TLS=false \
+GEMINI_FIX_RESET_SEQUENCE_ON_LOGON=true \
+GEMINI_FIX_SYMBOLS=BTCUSD,ETHUSD \
+GEMINI_FIX_MARKET_DEPTH=1 \
+GEMINI_FIX_ENTRY_TYPES=0,1 \
+GEMINI_FIX_OUTPUT=data/fix/local-bridge-market-data.jsonl \
+GEMINI_FIX_SEQUENCE_FILE=data/fix/local-bridge-sequence.properties \
+GEMINI_FIX_MAX_MESSAGES=100 \
+./gradlew --no-daemon :ingestion-service:captureGeminiFixLive
+```
+
+The client receives local FIX messages, runs the existing FIX parser, and writes the capture. The bridge exits after its configured message count or when the client disconnects.
+
 ## Nasdaq ITCH 5.0
 
 The ITCH adapter uses the official Nasdaq binary-file framing: a two-byte big-endian message length followed by the message payload. It parses stock directory metadata, add orders, attributed adds, executions, execute-with-price, cancels, deletes, replaces, and trade messages. Quantities are normalized to the schema's integer nanos convention, just like the decimal-sized Coinbase and Gemini feeds.
@@ -120,6 +151,8 @@ Source references: [Nasdaq ITCH FAQ](https://www.nasdaqtrader.com/Content/Techni
 ```bash
 ./gradlew --no-daemon :benchmark:jmh
 ```
+
+To measure the single-worker CPU pipeline using a real Coinbase capture, see the benchmark commands in the [operator guide](docs/operator-guide.md). A result such as `280K+ messages/sec on one core` means one processing worker completed more than 280,000 raw-message parse/translation operations per second under the documented benchmark conditions; it does not mean the public WebSocket delivered 280,000 messages per second.
 
 The benchmark is a measurement tool, not a claim that the final target has already been reached. Record the machine, Java version, input, settings, throughput, and whether parsing, protobuf creation, transport, and verification were included.
 

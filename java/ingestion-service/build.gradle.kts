@@ -73,3 +73,19 @@ tasks.register<JavaExec>("captureGeminiFixLive") {
     mainClass.set("com.akshit.marketdata.ingestion.GeminiFixLiveCaptureApp")
     workingDir = rootProject.projectDir
 }
+
+tasks.register<JavaExec>("runLocalFixBridge") {
+    group = "market data"
+    description = "Serve real Coinbase public WebSocket data through a localhost Gemini-shaped FIX session."
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set("com.akshit.marketdata.ingestion.LocalFixBridgeApp")
+    workingDir = rootProject.projectDir
+}
+
+tasks.register<JavaExec>("benchmarkLocalFixPipeline") {
+    group = "market data"
+    description = "Measure single-worker Coinbase JSON to local FIX to normalized-event throughput."
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set("com.akshit.marketdata.ingestion.LocalFixPipelineBenchmarkApp")
+    workingDir = rootProject.projectDir
+}
