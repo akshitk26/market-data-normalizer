@@ -26,6 +26,7 @@ final class NasdaqItchBinaryParserTest {
         assertEquals(Action.ADD, add.getL2Update().getAction());
         assertEquals(Side.BID, add.getL2Update().getSide());
         assertEquals("AAPL", add.getInstrument());
+        assertEquals(2, add.getSequenceNumber());
         assertEquals(123_456_700_000L, add.getL2Update().getPriceNanos());
         assertEquals(100_000_000_000L, add.getL2Update().getQuantityNanos());
         assertTrue(add.getEventTimeNs() > 0);

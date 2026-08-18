@@ -13,10 +13,11 @@ The project reads market data from different feed formats and converts it into o
 - Nasdaq TotalView-ITCH 5.0 binary parser
 - Real Nasdaq sample-window downloader
 - Sequence-gap detection and first-version replay coordinator
+- Order-book verification and desynchronization reporting
 - ZeroMQ publisher/subscriber classes
 - Optional C++20 native modules
 
-Replay recovery is not connected to all feed commands yet. ZeroMQ publication is also not connected to the capture commands yet.
+Replay and order-book verification are connected to the Coinbase, Gemini FIX, and Nasdaq ITCH processing paths. ZeroMQ publication is not connected to the capture commands yet.
 
 ## Flow
 
@@ -36,7 +37,7 @@ Coinbase JSON, Gemini FIX, and Nasdaq ITCH are converted to `MarketDataEnvelope`
 | `java/feed-sources` | Coinbase, Gemini FIX, and Nasdaq ITCH adapters |
 | `java/ingestion-service` | Capture, processing, bridge, and benchmark commands |
 | `java/transport-zmq` | ZeroMQ publisher and subscriber |
-| `java/book-verifier` | Book verification placeholder |
+| `java/book-verifier` | Book verification application module |
 | `java/benchmark` | JMH benchmarks |
 | `native` | Optional C++20 modules |
 | `docs` | Architecture and operating instructions |
@@ -148,7 +149,7 @@ The downloader reads real Nasdaq TotalView-ITCH v5.0 files and stores only a sma
 
 `RingReplayBuffer` stores recent normalized events. `ReplayCoordinator` tracks sequences by source, detects gaps, filters replay requests by instrument, and reports whether the requested range is complete.
 
-The coordinator is tested but is not yet connected to every live capture path or the ZeroMQ transport.
+The coordinator and order-book verifier are connected to the source processing paths. ZeroMQ is not connected yet.
 
 ## Performance
 

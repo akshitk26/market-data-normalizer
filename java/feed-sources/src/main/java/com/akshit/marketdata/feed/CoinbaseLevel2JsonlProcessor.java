@@ -2,6 +2,7 @@ package com.akshit.marketdata.feed;
 
 import com.akshit.marketdata.proto.Action;
 import com.akshit.marketdata.proto.MarketDataEnvelope;
+import com.akshit.marketdata.core.NormalizedEventPipeline;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -14,9 +15,15 @@ import java.util.Map;
 
 public final class CoinbaseLevel2JsonlProcessor {
     private final CoinbaseLevel2Parser parser;
+    private final NormalizedEventPipeline pipeline;
 
     public CoinbaseLevel2JsonlProcessor(CoinbaseLevel2Parser parser) {
+        this(parser, new NormalizedEventPipeline());
+    }
+
+    public CoinbaseLevel2JsonlProcessor(CoinbaseLevel2Parser parser, NormalizedEventPipeline pipeline) {
         this.parser = parser;
+        this.pipeline = pipeline;
     }
 
     public ParsedFeedStats process(Path path) throws IOException {
@@ -36,6 +43,7 @@ public final class CoinbaseLevel2JsonlProcessor {
                 rawMessages++;
                 List<MarketDataEnvelope> events = parser.parse(line);
                 for (MarketDataEnvelope event : events) {
+                    pipeline.accept(event);
                     normalizedEvents++;
                     statsByInstrument.merge(event.getInstrument(), 1, Integer::sum);
                     if (event.hasBookSnapshot()) {
@@ -51,6 +59,10 @@ public final class CoinbaseLevel2JsonlProcessor {
             }
         }
 
-        return new ParsedFeedStats(rawMessages, normalizedEvents, snapshots, l2Updates, deletes, statsByInstrument);
+        return new ParsedFeedStats(rawMessages, normalizedEvents, snapshots, l2Updates, deletes, statsByInstrument,
+                pipeline.sequenceGaps(), pipeline.orderBookVerifier().report().desynchronizedEvents(),
+                pipeline.orderBookVerifier().report().lastError());
     }
+
+    public NormalizedEventPipeline pipeline() { return pipeline; }
 }

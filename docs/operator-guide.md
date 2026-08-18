@@ -23,7 +23,7 @@ cmake --build native/build
 3. `feed-sources` parses Coinbase, Gemini FIX, and Nasdaq ITCH.
 4. `ingestion-service` provides runnable commands.
 5. `transport-zmq` contains the ZeroMQ boundary.
-6. `book-verifier` and `benchmark` are downstream modules.
+6. `book-verifier` contains the order-book verification application module.
 
 ## 3. Coinbase
 
@@ -103,15 +103,27 @@ The parser maintains order state during the capture. A mid-session window can co
 
 ## 7. Replay
 
-`RingReplayBuffer` stores recent events in memory. `ReplayCoordinator` adds events, tracks source sequence numbers, reports gaps, and creates protobuf `ReplayResponse` messages.
+`RingReplayBuffer` stores recent events in memory. `ReplayCoordinator` adds events, tracks source sequence numbers, reports gaps, and creates protobuf `ReplayResponse` messages. The file processors and Gemini live session send normalized events through it.
 
-The first version is tested in isolation. It is not yet connected to every feed command or ZeroMQ.
+Replay is source-scoped. A source sequence can have multiple normalized events, so duplicate sequence values are allowed. ITCH uses the message tracking number as its sequence value.
 
-## 8. ZeroMQ
+## 8. Order Book Verification
+
+`OrderBookVerifier` keeps one book per instrument. It applies snapshots first, then applies updates to the correct bid or ask side.
+
+- Snapshot levels replace the current book.
+- Updates with an order ID track individual orders. This is used by ITCH.
+- Updates without an order ID track price-level quantities. This is used by Coinbase and the current FIX normalizer.
+- Add, modify, delete, and trade actions update the stored state.
+- Invalid actions, unknown order IDs, negative quantities, duplicate snapshot prices, and trades larger than known quantity are reported as desynchronization events.
+
+The source processors print `sequence_gaps` and `desynchronized_events` after processing.
+
+## 9. ZeroMQ
 
 `transport-zmq` contains protobuf publisher and subscriber classes. Source commands do not publish events through ZeroMQ yet.
 
-## 9. Benchmark
+## 10. Benchmark
 
 Capture a real Coinbase input file:
 
@@ -120,25 +132,47 @@ Capture a real Coinbase input file:
   --args="BTC-USD,ETH-USD,SOL-USD,LTC-USD 500 data/websocket/coinbase-benchmark.jsonl"
 ```
 
-Measure one Java worker translating Coinbase JSON to FIX and parsing FIX into normalized events:
+The benchmark counts:
 
-```bash
-./gradlew --no-daemon :ingestion-service:benchmarkLocalFixPipeline \
-  --args="data/websocket/coinbase-benchmark.jsonl 10"
-```
+- source messages processed per second
+- normalized protobuf events produced per second
+- input bytes per second for ITCH
 
-This is a CPU benchmark using real captured input. It is not a live-network benchmark. The application uses one processing worker. Linux users can use `taskset -c 0` for CPU affinity. macOS may schedule JVM support threads on other cores.
+The benchmark pipeline includes source parsing, protobuf creation, replay-buffer insertion, sequence-gap tracking, and order-book verification. It does not include network delivery or ZeroMQ.
 
-Measure the direct Coinbase JSON-to-normalized path:
+Measure the Coinbase JSON-to-normalized pipeline:
 
 ```bash
 ./gradlew --no-daemon :ingestion-service:benchmarkCoinbasePipeline \
   --args="data/websocket/coinbase-benchmark.jsonl 10"
 ```
 
-Compare this result with the FIX bridge result. The direct path shows source parsing cost. The FIX path includes translation and FIX parsing.
+Measure the Gemini FIX tag-value-to-normalized pipeline using an official captured FIX file:
 
-## 10. Troubleshooting
+```bash
+./gradlew --no-daemon :ingestion-service:benchmarkGeminiFixPipeline \
+  --args="data/fix/benchmark-official.jsonl 10"
+```
+
+Measure the Nasdaq ITCH binary-to-normalized pipeline using a real downloaded sample window:
+
+```bash
+./gradlew --no-daemon :ingestion-service:benchmarkNasdaqItchPipeline \
+  --args="data/itch/verification-window.bin 2026-06-12 10"
+```
+
+These are CPU benchmarks using captured input. They are not live-network benchmarks. Each uses one processing worker. Linux users can use `taskset -c 0` for CPU affinity. macOS may schedule JVM support threads on other cores.
+
+Measure the compatibility path that translates Coinbase JSON to FIX and parses the generated FIX text:
+
+```bash
+./gradlew --no-daemon :ingestion-service:benchmarkLocalFixPipeline \
+  --args="data/websocket/coinbase-benchmark.jsonl 10"
+```
+
+The direct Coinbase, FIX, and ITCH commands measure the shared processing path for each source. `benchmarkLocalFixPipeline` measures the separate compatibility path that translates Coinbase JSON into FIX and parses the generated FIX text.
+
+## 11. Troubleshooting
 
 Java version:
 

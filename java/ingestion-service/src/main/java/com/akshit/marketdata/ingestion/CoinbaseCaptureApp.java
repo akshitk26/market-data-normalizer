@@ -47,6 +47,9 @@ public final class CoinbaseCaptureApp {
         summary.add("snapshots=" + stats.snapshots());
         summary.add("l2_updates=" + stats.l2Updates());
         summary.add("deletes=" + stats.deletes());
+        summary.add("sequence_gaps=" + stats.sequenceGaps());
+        summary.add("desynchronized_events=" + stats.desynchronizedEvents());
+        summary.add("last_verification_error=" + stats.lastVerificationError());
         for (Map.Entry<String, Integer> entry : stats.normalizedEventsByInstrument().entrySet()) {
             summary.add("instrument." + entry.getKey() + ".normalized_events=" + entry.getValue());
         }

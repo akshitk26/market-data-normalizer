@@ -1,6 +1,7 @@
 package com.akshit.marketdata.feed;
 
 import com.akshit.marketdata.proto.MarketDataEnvelope;
+import com.akshit.marketdata.core.NormalizedEventPipeline;
 
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
@@ -29,6 +30,7 @@ public final class GeminiFixMarketDataSession {
 
     private final GeminiFixSessionConfig config;
     private final FixTagValueMarketDataParser parser;
+    private final NormalizedEventPipeline pipeline;
     private long nextOutgoingSequence;
     private long expectedIncomingSequence;
     private long lastSentAtMillis;
@@ -36,8 +38,13 @@ public final class GeminiFixMarketDataSession {
     private long lastTestRequestAtMillis;
 
     public GeminiFixMarketDataSession(GeminiFixSessionConfig config) {
+        this(config, new NormalizedEventPipeline());
+    }
+
+    public GeminiFixMarketDataSession(GeminiFixSessionConfig config, NormalizedEventPipeline pipeline) {
         this.config = config;
         this.parser = new FixTagValueMarketDataParser();
+        this.pipeline = pipeline;
     }
 
     public SessionResult capture() throws IOException {
@@ -102,6 +109,9 @@ public final class GeminiFixMarketDataSession {
                     marketDataMessages++;
                     if (events.isEmpty()) {
                         throw new IOException("Gemini FIX market-data message produced no normalized events");
+                    }
+                    for (MarketDataEnvelope event : events) {
+                        pipeline.accept(event);
                     }
                 }
             }

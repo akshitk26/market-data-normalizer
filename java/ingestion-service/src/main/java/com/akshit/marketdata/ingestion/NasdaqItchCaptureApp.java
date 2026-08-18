@@ -27,7 +27,9 @@ public final class NasdaqItchCaptureApp {
         ParsedFeedStats stats = new NasdaqItchBinaryFileProcessor(capture.source().sessionDate()).process(output);
 
         System.out.println("source=nasdaq-public-totalview-itch-v50");
+        System.out.println("provenance=downloaded_real_nasdaq_sample_binary");
         System.out.println("source_file=" + capture.source().name());
+        System.out.println("source_uri=" + capture.source().uri());
         System.out.println("session_date=" + capture.source().sessionDate());
         System.out.println("random_seed=" + capture.seed());
         System.out.println("skipped_messages=" + capture.skippedMessages());
@@ -42,6 +44,9 @@ public final class NasdaqItchCaptureApp {
         System.out.println("snapshots=" + stats.snapshots());
         System.out.println("l2_updates=" + stats.l2Updates());
         System.out.println("deletes=" + stats.deletes());
+        System.out.println("sequence_gaps=" + stats.sequenceGaps());
+        System.out.println("desynchronized_events=" + stats.desynchronizedEvents());
+        System.out.println("last_verification_error=" + stats.lastVerificationError());
         stats.normalizedEventsByInstrument().forEach((instrument, count) ->
                 System.out.println("instrument." + instrument + ".normalized_events=" + count));
     }

@@ -2,6 +2,7 @@ package com.akshit.marketdata.feed;
 
 import com.akshit.marketdata.proto.Action;
 import com.akshit.marketdata.proto.MarketDataEnvelope;
+import com.akshit.marketdata.core.NormalizedEventPipeline;
 
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
@@ -17,13 +18,19 @@ import java.util.Map;
 
 public final class NasdaqItchBinaryFileProcessor {
     private final LocalDate sessionDate;
+    private final NormalizedEventPipeline pipeline;
 
     public NasdaqItchBinaryFileProcessor() {
-        this(null);
+        this(null, new NormalizedEventPipeline());
     }
 
     public NasdaqItchBinaryFileProcessor(LocalDate sessionDate) {
+        this(sessionDate, new NormalizedEventPipeline());
+    }
+
+    public NasdaqItchBinaryFileProcessor(LocalDate sessionDate, NormalizedEventPipeline pipeline) {
         this.sessionDate = sessionDate;
+        this.pipeline = pipeline;
     }
 
     public ParsedFeedStats process(Path path) throws IOException {
@@ -49,6 +56,7 @@ public final class NasdaqItchBinaryFileProcessor {
                 rawMessages++;
                 List<MarketDataEnvelope> events = parser.parse(ByteBuffer.wrap(raw));
                 for (MarketDataEnvelope event : events) {
+                    pipeline.accept(event);
                     normalizedEvents++;
                     statsByInstrument.merge(event.getInstrument(), 1, Integer::sum);
                     if (event.hasBookSnapshot()) {
@@ -63,6 +71,10 @@ public final class NasdaqItchBinaryFileProcessor {
                 }
             }
         }
-        return new ParsedFeedStats(rawMessages, normalizedEvents, snapshots, l2Updates, deletes, statsByInstrument);
+        return new ParsedFeedStats(rawMessages, normalizedEvents, snapshots, l2Updates, deletes, statsByInstrument,
+                pipeline.sequenceGaps(), pipeline.orderBookVerifier().report().desynchronizedEvents(),
+                pipeline.orderBookVerifier().report().lastError());
     }
+
+    public NormalizedEventPipeline pipeline() { return pipeline; }
 }

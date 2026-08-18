@@ -2,7 +2,7 @@
 
 The app reads market data from three source formats and converts it to one Level 2 protobuf schema.
 
-The shared core tracks source sequences, detects gaps, stores recent events, and can replay events that are still in memory. ZeroMQ and book verification are separate downstream components.
+The shared core tracks source sequences, detects gaps, stores recent events, replays available events, and verifies order-book updates. ZeroMQ is a separate downstream component.
 
 ```mermaid
 flowchart LR
@@ -24,6 +24,7 @@ flowchart LR
         SeqTracker["Sequence tracker\nchecks expected message order"]
         GapDetector["Gap detector\nfinds missing sequence ranges"]
         ReplayBuffer["Ring replay buffer\nkeeps recent normalized messages"]
+        BookVerifier["Order book verifier\nchecks state transitions"]
     end
 
     subgraph Transport["Internal transport"]
@@ -33,7 +34,7 @@ flowchart LR
     end
 
     subgraph Consumers["Downstream consumers"]
-        BookBuilder["Book verifier\nrebuilds L2 order books"]
+        BookBuilder["Downstream book consumer\nuses verified events"]
         Metrics["Metrics and reports\nthroughput, gaps, desyncs"]
         ReplayRequester["Replay requester\nasks for missing ranges"]
     end
@@ -55,6 +56,7 @@ flowchart LR
     Normalizer --> SeqTracker
     SeqTracker --> GapDetector
     GapDetector --> ReplayBuffer
+    ReplayBuffer --> BookVerifier
     ReplayBuffer --> Proto
     Normalizer --> Proto
 

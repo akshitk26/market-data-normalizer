@@ -1,6 +1,6 @@
 package com.akshit.marketdata.ingestion;
 
-import com.akshit.marketdata.feed.CoinbaseLevel2Parser;
+import com.akshit.marketdata.feed.FixTagValueMarketDataParser;
 import com.akshit.marketdata.core.NormalizedEventPipeline;
 import com.akshit.marketdata.proto.MarketDataEnvelope;
 
@@ -11,28 +11,23 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Single-worker benchmark for the direct Coinbase JSON-to-protobuf path. */
-public final class CoinbasePipelineBenchmarkApp {
-    private CoinbasePipelineBenchmarkApp() {
+/** Single-worker benchmark for FIX tag-value messages to normalized protobuf events. */
+public final class GeminiFixPipelineBenchmarkApp {
+    private GeminiFixPipelineBenchmarkApp() {
     }
 
     public static void main(String[] args) throws IOException {
         if (args.length < 1) {
-            throw new IllegalArgumentException("Usage: <coinbase-jsonl> [seconds]");
+            throw new IllegalArgumentException("Usage: <fix-capture> [seconds]");
         }
         Path input = Path.of(args[0]);
         int seconds = args.length > 1 ? Integer.parseInt(args[1]) : 10;
-        if (seconds <= 0) {
-            throw new IllegalArgumentException("seconds must be positive");
-        }
-
         List<String> messages = loadMessages(input);
-        CoinbaseLevel2Parser parser = new CoinbaseLevel2Parser();
-        run(messages, parser, 2_000_000_000L);
-        Result result = run(messages, parser, seconds * 1_000_000_000L);
+        run(messages, 2_000_000_000L);
+        Result result = run(messages, seconds * 1_000_000_000L);
         double elapsedSeconds = result.elapsedNs / 1_000_000_000.0;
 
-        System.out.println("benchmark=single-worker-coinbase-json-to-normalized");
+        System.out.println("benchmark=single-worker-fix-tag-value-to-normalized");
         System.out.println("input=" + input.toAbsolutePath());
         System.out.println("source_messages=" + messages.size());
         System.out.println("raw_messages_processed=" + result.rawMessages);
@@ -41,12 +36,12 @@ public final class CoinbasePipelineBenchmarkApp {
         System.out.println("raw_messages_per_second=" + result.rawMessages / elapsedSeconds);
         System.out.println("normalized_events_per_second=" + result.normalizedEvents / elapsedSeconds);
         System.out.println("worker_threads=1");
-        System.out.println("note=The real capture is replayed in memory to measure parsing, replay tracking, and order-book verification; this is not a live-network rate.");
+        System.out.println("note=This measures FIX parsing, protobuf creation, replay tracking, and order-book verification from a real capture; it does not measure network delivery.");
     }
 
     private static List<String> loadMessages(Path input) throws IOException {
         List<String> messages = new ArrayList<>();
-        for (String line : Files.readAllLines(input, StandardCharsets.UTF_8)) {
+        for (String line : Files.readAllLines(input, StandardCharsets.US_ASCII)) {
             if (!line.trim().isEmpty()) {
                 messages.add(line);
             }
@@ -57,11 +52,12 @@ public final class CoinbasePipelineBenchmarkApp {
         return messages;
     }
 
-    private static Result run(List<String> messages, CoinbaseLevel2Parser parser, long durationNs) {
+    private static Result run(List<String> messages, long durationNs) {
         long start = System.nanoTime();
         long rawMessages = 0;
         long normalizedEvents = 0;
         do {
+            FixTagValueMarketDataParser parser = new FixTagValueMarketDataParser();
             NormalizedEventPipeline pipeline = new NormalizedEventPipeline();
             for (String message : messages) {
                 List<MarketDataEnvelope> events = parser.parse(message);

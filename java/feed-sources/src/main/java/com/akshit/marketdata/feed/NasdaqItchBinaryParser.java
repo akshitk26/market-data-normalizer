@@ -18,10 +18,11 @@ import java.util.ArrayList;
 
 public final class NasdaqItchBinaryParser implements MultiMessageFeedParser<ByteBuffer> {
     public static final String SOURCE_FEED = "nasdaq-totalview-itch-5.0";
+    /** ITCH tracking number from the common message header, not a fabricated local counter. */
 
     private final LocalDate sessionDate;
     private final Map<Long, OrderState> orders = new HashMap<>();
-    private long normalizedSequence;
+    private long lastTrackingNumber;
 
     public NasdaqItchBinaryParser() {
         this(null);
@@ -203,7 +204,7 @@ public final class NasdaqItchBinaryParser implements MultiMessageFeedParser<Byte
     private int skipCommonHeader(ByteBuffer message) {
         requireRemaining(message, 10);
         int stockLocate = unsignedShort(message);
-        skip(message, 2);
+        lastTrackingNumber = unsignedShort(message);
         lastTimestampNanos = unsignedLong48(message);
         return stockLocate;
     }
@@ -231,7 +232,7 @@ public final class NasdaqItchBinaryParser implements MultiMessageFeedParser<Byte
         MarketDataEnvelope.Builder envelope = MarketDataEnvelope.newBuilder()
                 .setSourceFeed(SOURCE_FEED)
                 .setInstrument(instrument == null ? "UNKNOWN" : instrument)
-                .setSequenceNumber(++normalizedSequence)
+                .setSequenceNumber(lastTrackingNumber)
                 .setReceiveTimeNs(System.currentTimeMillis() * 1_000_000L)
                 .setL2Update(update);
         long timestampNanos = lastTimestampNanos;

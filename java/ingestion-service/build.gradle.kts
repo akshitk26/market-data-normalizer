@@ -97,3 +97,19 @@ tasks.register<JavaExec>("benchmarkCoinbasePipeline") {
     mainClass.set("com.akshit.marketdata.ingestion.CoinbasePipelineBenchmarkApp")
     workingDir = rootProject.projectDir
 }
+
+tasks.register<JavaExec>("benchmarkGeminiFixPipeline") {
+    group = "market data"
+    description = "Measure single-worker Gemini FIX tag-value to normalized-event throughput."
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set("com.akshit.marketdata.ingestion.GeminiFixPipelineBenchmarkApp")
+    workingDir = rootProject.projectDir
+}
+
+tasks.register<JavaExec>("benchmarkNasdaqItchPipeline") {
+    group = "market data"
+    description = "Measure single-worker Nasdaq ITCH binary to normalized-event throughput."
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set("com.akshit.marketdata.ingestion.NasdaqItchPipelineBenchmarkApp")
+    workingDir = rootProject.projectDir
+}

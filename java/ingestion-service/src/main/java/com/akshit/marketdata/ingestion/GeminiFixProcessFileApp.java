@@ -23,6 +23,9 @@ public final class GeminiFixProcessFileApp {
         System.out.println("snapshots=" + stats.snapshots());
         System.out.println("l2_updates=" + stats.l2Updates());
         System.out.println("deletes=" + stats.deletes());
+        System.out.println("sequence_gaps=" + stats.sequenceGaps());
+        System.out.println("desynchronized_events=" + stats.desynchronizedEvents());
+        System.out.println("last_verification_error=" + stats.lastVerificationError());
         stats.normalizedEventsByInstrument().forEach((instrument, count) ->
                 System.out.println("instrument." + instrument + ".normalized_events=" + count));
     }

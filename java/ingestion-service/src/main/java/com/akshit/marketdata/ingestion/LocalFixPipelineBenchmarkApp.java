@@ -2,6 +2,7 @@ package com.akshit.marketdata.ingestion;
 
 import com.akshit.marketdata.feed.CoinbaseToGeminiFixTranslator;
 import com.akshit.marketdata.feed.FixTagValueMarketDataParser;
+import com.akshit.marketdata.core.NormalizedEventPipeline;
 import com.akshit.marketdata.proto.MarketDataEnvelope;
 
 import java.io.IOException;
@@ -71,13 +72,17 @@ public final class LocalFixPipelineBenchmarkApp {
         long normalizedEvents = 0;
         long sequence = 2;
         do {
+            NormalizedEventPipeline pipeline = new NormalizedEventPipeline();
             for (String json : messages) {
                 String fix = translator.translate(json, sequence++, "LOCAL-CLIENT", "benchmark");
                 rawMessages++;
                 if (fix != null) {
                     fixMessages++;
                     List<MarketDataEnvelope> events = parser.parse(fix);
-                    normalizedEvents += events.size();
+                    for (MarketDataEnvelope event : events) {
+                        pipeline.accept(event);
+                        normalizedEvents++;
+                    }
                 }
             }
         } while (System.nanoTime() - start < durationNs);
