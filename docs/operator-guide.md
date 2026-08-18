@@ -172,6 +172,13 @@ Measure the compatibility path that translates Coinbase JSON to FIX and parses t
 
 The direct Coinbase, FIX, and ITCH commands measure the shared processing path for each source. `benchmarkLocalFixPipeline` measures the separate compatibility path that translates Coinbase JSON into FIX and parses the generated FIX text.
 
+Measure all three source paths through one worker and one shared pipeline:
+
+```bash
+./gradlew --no-daemon :ingestion-service:benchmarkCombinedPipeline \
+  --args="data/websocket/coinbase-benchmark.jsonl data/fix/benchmark-official.jsonl data/itch/verification-window.bin 2026-06-12 10"
+```
+
 ## 11. Replay Resilience
 
 Run the default 0.5% feed-message loss test:

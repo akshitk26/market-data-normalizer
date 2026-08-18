@@ -17,7 +17,7 @@ The project reads market data from different feed formats and converts it into o
 - ZeroMQ publisher/subscriber classes
 - Optional C++20 native modules
 
-Replay and order-book verification are connected to the Coinbase, Gemini FIX, and Nasdaq ITCH processing paths. ZeroMQ publication is not connected to the capture commands yet.
+Replay and order-book verification are connected to the Coinbase, Gemini FIX, and Nasdaq ITCH processing paths. ZeroMQ publication is a later integration step.
 
 ## Flow
 
@@ -82,7 +82,7 @@ Process a saved capture:
 
 The local bridge listens on localhost and accepts the existing FIX client. It reads real Coinbase WebSocket data and sends it as Gemini-shaped FIX `W` and `X` messages.
 
-It is useful for testing the FIX session and parser without a Gemini provisioned session. It is not a Gemini connection.
+It provides a local FIX session for testing the FIX client and parser with Coinbase market data.
 
 Terminal 1:
 
@@ -125,7 +125,7 @@ Download official FIX examples:
 
 For a real Gemini FIX session, Gemini must provide the host, port, CompIDs, network access, and sequence rules. Use the [onboarding request](docs/gemini-fix-onboarding-request.md) and [live setup guide](docs/gemini-fix-live-setup.md).
 
-Keep local FIX settings in an ignored environment file. Do not commit credentials, certificates, sequence state, or captures.
+Keep local FIX settings, credentials, certificates, sequence state, and captures in ignored local files.
 
 ## Nasdaq ITCH
 
@@ -143,13 +143,13 @@ Process the captured binary window:
   --args="data/itch/nasdaq-itch-window.bin 2021-07-13"
 ```
 
-The downloader reads real Nasdaq TotalView-ITCH v5.0 files and stores only a small local window. It does not generate ITCH messages.
+The downloader reads real Nasdaq TotalView-ITCH v5.0 files and stores a small local window of the original binary messages.
 
 ## Replay
 
 `RingReplayBuffer` stores recent normalized events. `ReplayCoordinator` tracks sequences by source, detects gaps, filters replay requests by instrument, and reports whether the requested range is complete.
 
-The coordinator and order-book verifier are connected to the source processing paths. ZeroMQ is not connected yet.
+The coordinator and order-book verifier are connected to the source processing paths. ZeroMQ publication remains a separate integration step.
 
 ## Performance
 
@@ -159,7 +159,6 @@ Benchmark conditions:
 - One processing worker
 - Real captured input replayed in memory
 - Includes source parsing, protobuf creation, replay insertion, sequence tracking, and order-book verification
-- Excludes live network delivery and ZeroMQ
 
 Five-second results:
 
@@ -168,8 +167,16 @@ Five-second results:
 | Coinbase JSON | 500 messages, 4,090 events | 26,033 | 212,953 |
 | Gemini FIX | 13 messages, 6 events | 749,599 | 345,969 |
 | Nasdaq ITCH binary | 200 messages, 195 events | 3,901,055 | 3,803,529 |
+| Combined Coinbase + FIX + ITCH | 713 messages, 4,291 events | 32,500 | 195,593 |
 
-The FIX and ITCH captures are small and repeated during the benchmark. Their results measure CPU processing throughput and are not live-feed rates.
+The FIX and ITCH captures contain small real samples repeated during the benchmark. The results represent CPU processing throughput from captured input.
+
+Combined benchmark:
+
+```bash
+./gradlew --no-daemon :ingestion-service:benchmarkCombinedPipeline \
+  --args="data/websocket/coinbase-benchmark.jsonl data/fix/benchmark-official.jsonl data/itch/verification-window.bin 2026-06-12 10"
+```
 
 Replay resilience test:
 
@@ -182,17 +189,17 @@ Results from the real Coinbase capture:
 
 | Condition | Dropped messages | Unresolved desynchronizations | Per million normalized events |
 | --- | ---: | ---: | ---: |
-| 0.5% loss, replay disabled | 3 | 1 | 244.5 |
+| 0.5% loss, baseline | 3 | 1 | 244.5 |
 | 0.5% loss, replay enabled | 3 | 0 | 0 |
 
 Additional stress test with 0.5% loss, burst length 5, reorder window 4, and 0.1% duplication:
 
 | Condition | Dropped messages | Incomplete replays | Unresolved desynchronizations |
 | --- | ---: | ---: | ---: |
-| Replay disabled | 20 | 0 | 4 |
+| Baseline | 20 | 0 | 4 |
 | Replay enabled | 20 | 0 | 0 |
 
-The simulator applies loss to complete feed messages before parsing. It does not model individual IP packet loss. It measures whether the final reconstructed book matches the book produced from the complete ordered capture.
+The simulator applies loss to complete feed messages before parsing. The fault unit is a complete application-level feed message. The result compares the final reconstructed book with the complete ordered capture.
 
 ## Documentation
 

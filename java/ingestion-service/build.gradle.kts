@@ -121,3 +121,11 @@ tasks.register<JavaExec>("simulateReplayResilience") {
     mainClass.set("com.akshit.marketdata.ingestion.ReplayResilienceSimulationApp")
     workingDir = rootProject.projectDir
 }
+
+tasks.register<JavaExec>("benchmarkCombinedPipeline") {
+    group = "market data"
+    description = "Measure one worker processing Coinbase JSON, Gemini FIX, and Nasdaq ITCH together."
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set("com.akshit.marketdata.ingestion.CombinedPipelineBenchmarkApp")
+    workingDir = rootProject.projectDir
+}
