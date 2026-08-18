@@ -113,3 +113,11 @@ tasks.register<JavaExec>("benchmarkNasdaqItchPipeline") {
     mainClass.set("com.akshit.marketdata.ingestion.NasdaqItchPipelineBenchmarkApp")
     workingDir = rootProject.projectDir
 }
+
+tasks.register<JavaExec>("simulateReplayResilience") {
+    group = "market data"
+    description = "Simulate loss, burst loss, reordering, and duplication against a real Coinbase capture."
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set("com.akshit.marketdata.ingestion.ReplayResilienceSimulationApp")
+    workingDir = rootProject.projectDir
+}

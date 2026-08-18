@@ -153,7 +153,46 @@ The coordinator and order-book verifier are connected to the source processing p
 
 ## Performance
 
-Coming soon.
+Benchmark conditions:
+
+- Java 11
+- One processing worker
+- Real captured input replayed in memory
+- Includes source parsing, protobuf creation, replay insertion, sequence tracking, and order-book verification
+- Excludes live network delivery and ZeroMQ
+
+Five-second results:
+
+| Source path | Capture | Raw messages/sec | Normalized events/sec |
+| --- | ---: | ---: | ---: |
+| Coinbase JSON | 500 messages, 4,090 events | 26,033 | 212,953 |
+| Gemini FIX | 13 messages, 6 events | 749,599 | 345,969 |
+| Nasdaq ITCH binary | 200 messages, 195 events | 3,901,055 | 3,803,529 |
+
+The FIX and ITCH captures are small and repeated during the benchmark. Their results measure CPU processing throughput and are not live-feed rates.
+
+Replay resilience test:
+
+```bash
+./gradlew --no-daemon :ingestion-service:simulateReplayResilience \
+  --args="data/websocket/coinbase-benchmark.jsonl 0.005 20260818 100000 1 1 0"
+```
+
+Results from the real Coinbase capture:
+
+| Condition | Dropped messages | Unresolved desynchronizations | Per million normalized events |
+| --- | ---: | ---: | ---: |
+| 0.5% loss, replay disabled | 3 | 1 | 244.5 |
+| 0.5% loss, replay enabled | 3 | 0 | 0 |
+
+Additional stress test with 0.5% loss, burst length 5, reorder window 4, and 0.1% duplication:
+
+| Condition | Dropped messages | Incomplete replays | Unresolved desynchronizations |
+| --- | ---: | ---: | ---: |
+| Replay disabled | 20 | 0 | 4 |
+| Replay enabled | 20 | 0 | 0 |
+
+The simulator applies loss to complete feed messages before parsing. It does not model individual IP packet loss. It measures whether the final reconstructed book matches the book produced from the complete ordered capture.
 
 ## Documentation
 

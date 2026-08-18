@@ -10,6 +10,8 @@ import com.akshit.marketdata.proto.Side;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 /** Applies normalized events and reports state transitions that cannot be reconciled. */
 public final class OrderBookVerifier {
@@ -49,6 +51,45 @@ public final class OrderBookVerifier {
     public synchronized OrderBookVerificationReport report() {
         return new OrderBookVerificationReport(
                 processedEvents, appliedEvents, ignoredEvents, desynchronizedEvents, snapshots, lastError);
+    }
+
+    /** Returns deterministic per-instrument state digests for end-state comparisons. */
+    public synchronized Map<String, String> bookDigests() {
+        Map<String, String> digests = new HashMap<>();
+        for (Map.Entry<String, Book> entry : books.entrySet()) {
+            StringBuilder state = new StringBuilder();
+            appendLevels(state, "B", entry.getValue().bids);
+            appendLevels(state, "A", entry.getValue().asks);
+            for (Map.Entry<String, OrderState> order : new TreeMap<>(entry.getValue().orders).entrySet()) {
+                OrderState value = order.getValue();
+                state.append("O|").append(order.getKey()).append('|')
+                        .append(value.side).append('|').append(value.price).append('|')
+                        .append(value.quantity).append(';');
+            }
+            digests.put(entry.getKey(), sha256(state.toString()));
+        }
+        return digests;
+    }
+
+    private static void appendLevels(StringBuilder state, String side, TreeMap<Long, Long> levels) {
+        for (Map.Entry<Long, Long> level : levels.entrySet()) {
+            state.append(side).append('|').append(level.getKey()).append('|')
+                    .append(level.getValue()).append(';');
+        }
+    }
+
+    private static String sha256(String value) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+            StringBuilder hex = new StringBuilder(digest.length * 2);
+            for (byte item : digest) {
+                hex.append(String.format(java.util.Locale.ROOT, "%02x", item));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException error) {
+            throw new IllegalStateException("SHA-256 is unavailable", error);
+        }
     }
 
     private OrderBookVerificationResult recordDesync(String instrument, String reason) {
