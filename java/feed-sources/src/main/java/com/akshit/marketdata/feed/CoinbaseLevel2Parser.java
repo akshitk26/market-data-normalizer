@@ -11,8 +11,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -37,10 +35,10 @@ public final class CoinbaseLevel2Parser implements MultiMessageFeedParser<String
             JsonNode root = objectMapper.readTree(rawMessage);
             String type = requiredText(root, "type");
             if ("snapshot".equals(type)) {
-                return Collections.singletonList(parseSnapshot(root));
+                return Collections.singletonList(parseSnapshot(root, System.currentTimeMillis() * 1_000_000L));
             }
             if ("l2update".equals(type)) {
-                return parseUpdate(root);
+                return parseUpdate(root, System.currentTimeMillis() * 1_000_000L);
             }
             return Collections.emptyList();
         } catch (IOException e) {
@@ -48,22 +46,29 @@ public final class CoinbaseLevel2Parser implements MultiMessageFeedParser<String
         }
     }
 
-    private MarketDataEnvelope parseSnapshot(JsonNode root) {
+    private MarketDataEnvelope parseSnapshot(JsonNode root, long receiveTimeNs) {
         BookSnapshot.Builder snapshot = BookSnapshot.newBuilder();
         appendPriceLevels(snapshot, root.path("bids"), true);
         appendPriceLevels(snapshot, root.path("asks"), false);
 
-        return baseEnvelope(root)
+        return baseEnvelope(
+                requiredText(root, "product_id"),
+                optionalSequence(root),
+                optionalEventTimeNs(root),
+                receiveTimeNs)
                 .setBookSnapshot(snapshot)
                 .build();
     }
 
-    private List<MarketDataEnvelope> parseUpdate(JsonNode root) {
+    private List<MarketDataEnvelope> parseUpdate(JsonNode root, long receiveTimeNs) {
         JsonNode changes = root.path("changes");
         if (!changes.isArray()) {
             throw new IllegalArgumentException("Coinbase l2update message must include changes array");
         }
 
+        String instrument = requiredText(root, "product_id");
+        long sequence = optionalSequence(root);
+        long eventTimeNs = optionalEventTimeNs(root);
         List<MarketDataEnvelope> events = new ArrayList<>(changes.size());
         for (int index = 0; index < changes.size(); index++) {
             JsonNode change = changes.get(index);
@@ -72,34 +77,46 @@ public final class CoinbaseLevel2Parser implements MultiMessageFeedParser<String
             }
 
             String size = change.get(2).asText();
+            long quantityNanos = decimalToNanos(size);
             L2Update update = L2Update.newBuilder()
                     .setSide(parseSide(change.get(0).asText()))
-                    .setAction(isZero(size) ? Action.DELETE : Action.MODIFY)
+                    .setAction(quantityNanos == 0 ? Action.DELETE : Action.MODIFY)
                     .setPriceNanos(decimalToNanos(change.get(1).asText()))
-                    .setQuantityNanos(decimalToNanos(size))
+                    .setQuantityNanos(quantityNanos)
                     .setLevel(0)
                     .build();
 
-            events.add(baseEnvelope(root)
+            events.add(baseEnvelope(instrument, sequence, eventTimeNs, receiveTimeNs)
                     .setL2Update(update)
                     .build());
         }
         return events;
     }
 
-    private MarketDataEnvelope.Builder baseEnvelope(JsonNode root) {
+    private static MarketDataEnvelope.Builder baseEnvelope(
+            String instrument, long sequence, long eventTimeNs, long receiveTimeNs) {
         MarketDataEnvelope.Builder envelope = MarketDataEnvelope.newBuilder()
                 .setSourceFeed(SOURCE_FEED)
-                .setInstrument(requiredText(root, "product_id"))
-                .setReceiveTimeNs(System.currentTimeMillis() * 1_000_000L);
+                .setInstrument(instrument)
+                .setReceiveTimeNs(receiveTimeNs);
 
-        if (root.hasNonNull("sequence")) {
-            envelope.setSequenceNumber(root.get("sequence").asLong());
+        if (sequence > 0) {
+            envelope.setSequenceNumber(sequence);
         }
-        if (root.hasNonNull("time")) {
-            envelope.setEventTimeNs(instantToEpochNanos(Instant.parse(root.get("time").asText())));
+        if (eventTimeNs > 0) {
+            envelope.setEventTimeNs(eventTimeNs);
         }
         return envelope;
+    }
+
+    private static long optionalSequence(JsonNode root) {
+        return root.hasNonNull("sequence") ? root.get("sequence").asLong() : 0;
+    }
+
+    private static long optionalEventTimeNs(JsonNode root) {
+        return root.hasNonNull("time")
+                ? instantToEpochNanos(Instant.parse(root.get("time").asText()))
+                : 0;
     }
 
     private static void appendPriceLevels(BookSnapshot.Builder snapshot, JsonNode levels, boolean bid) {
@@ -143,15 +160,8 @@ public final class CoinbaseLevel2Parser implements MultiMessageFeedParser<String
         throw new IllegalArgumentException("Unknown Coinbase side: " + coinbaseSide);
     }
 
-    private static boolean isZero(String decimal) {
-        return BigDecimal.ZERO.compareTo(new BigDecimal(decimal)) == 0;
-    }
-
     private static long decimalToNanos(String decimal) {
-        return new BigDecimal(decimal)
-                .movePointRight(9)
-                .setScale(0, RoundingMode.UNNECESSARY)
-                .longValueExact();
+        return FixedPointDecimal.toNanos(decimal);
     }
 
     private static long instantToEpochNanos(Instant instant) {

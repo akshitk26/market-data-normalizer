@@ -19,8 +19,9 @@ void ReplayBuffer::append(ReplayEntry entry) {
 
 std::vector<ReplayEntry> ReplayBuffer::replay(std::uint64_t from_sequence, std::uint64_t to_sequence) const {
     std::vector<ReplayEntry> replayed;
+    const std::size_t oldest_index = (write_index_ + entries_.size() - size_) % entries_.size();
     for (std::size_t i = 0; i < size_; ++i) {
-        const ReplayEntry& entry = entries_[i];
+        const ReplayEntry& entry = entries_[(oldest_index + i) % entries_.size()];
         if (entry.sequence_number >= from_sequence && entry.sequence_number <= to_sequence) {
             replayed.push_back(entry);
         }

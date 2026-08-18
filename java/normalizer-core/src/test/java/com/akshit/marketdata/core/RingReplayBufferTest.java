@@ -4,6 +4,7 @@ import com.akshit.marketdata.proto.MarketDataEnvelope;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -25,5 +26,27 @@ final class RingReplayBufferTest {
         assertEquals(4, replayed.get(0).getSequenceNumber());
         assertEquals(5, replayed.get(1).getSequenceNumber());
         assertEquals(6, replayed.get(2).getSequenceNumber());
+    }
+
+    @Test
+    void replaysChronologicallyAfterTheRingWraps() {
+        RingReplayBuffer buffer = new RingReplayBuffer(3);
+        for (int sequence = 1; sequence <= 5; sequence++) {
+            buffer.append(event(sequence));
+        }
+
+        List<MarketDataEnvelope> replayed = buffer.replay(3, 5);
+
+        assertEquals(List.of(3L, 4L, 5L), replayed.stream()
+                .map(MarketDataEnvelope::getSequenceNumber)
+                .collect(Collectors.toList()));
+    }
+
+    private static MarketDataEnvelope event(long sequence) {
+        return MarketDataEnvelope.newBuilder()
+                .setSourceFeed("test")
+                .setInstrument("AAPL")
+                .setSequenceNumber(sequence)
+                .build();
     }
 }

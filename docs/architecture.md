@@ -1,8 +1,8 @@
 # High-Level Architecture
 
-This app is a translator plus reliability layer for market data.
+The app reads market data from three source formats and converts it to one Level 2 protobuf schema.
 
-Different sources send market data in different formats. The normalizer converts them into one internal Level 2 order book schema, checks whether messages are missing, repairs gaps when possible, and publishes a clean stream to downstream consumers.
+The shared core tracks source sequences, detects gaps, stores recent events, and can replay events that are still in memory. ZeroMQ and book verification are separate downstream components.
 
 ```mermaid
 flowchart LR
@@ -71,18 +71,18 @@ flowchart LR
 
 ## Component Purposes
 
-`feed-sources` brings market data into the system. It supports live Coinbase WebSocket capture, captured/file-based processing, official Gemini FIX examples, a provisioned Gemini FIX session, and official Nasdaq ITCH sample windows.
+`feed-sources` reads Coinbase WebSocket data, Gemini FIX data, and Nasdaq ITCH data.
 
-`feed adapters` understand source-specific formats. Each adapter converts raw source messages into the same internal event model.
+`feed adapters` parse source-specific formats and create the shared event model.
 
-`protobuf` is the shared message contract. It keeps the normalized stream compact, strict, and usable from both Java and C++.
+`protobuf` defines the shared normalized message format for Java and C++.
 
-`ZeroMQ` is the internal delivery pipe. The publisher/subscriber boundary is implemented, while wiring the current capture commands to publish every normalized event is a later transport step.
+`ZeroMQ` is the internal delivery pipe. The publisher and subscriber classes exist, but the capture commands are not wired to publish events yet.
 
-`sequence-gap detection` watches message numbers. If the stream jumps from sequence `1002` to `1005`, the app knows `1003` and `1004` are missing.
+`sequence-gap detection` watches message numbers and reports missing ranges.
 
-`ring-buffer replay` keeps recent messages in fixed-size memory. When a gap appears, the app can replay the missing range before the book stays wrong.
+`ring-buffer replay` stores recent events in fixed-size memory and returns available ranges.
 
-`book-verifier` proves correctness. It rebuilds order books from normalized messages and counts unresolved desynchronization events.
+`book-verifier` rebuilds order books and reports invalid updates.
 
-`benchmark` proves performance. It measures combined ingestion throughput and the effect of replay under controlled packet loss.
+`benchmark` measures parser and pipeline throughput.

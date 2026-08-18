@@ -8,8 +8,6 @@ import com.akshit.marketdata.proto.L2Update;
 import com.akshit.marketdata.proto.PriceLevel;
 import com.akshit.marketdata.proto.Side;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -244,10 +242,7 @@ public final class FixTagValueMarketDataParser implements MultiMessageFeedParser
     }
 
     private static long decimalToNanos(String decimal) {
-        return new BigDecimal(decimal)
-                .movePointRight(9)
-                .setScale(0, RoundingMode.UNNECESSARY)
-                .longValueExact();
+        return FixedPointDecimal.toNanos(decimal);
     }
 
     private static List<MarketDataEnvelope> singleton(MarketDataEnvelope event) {

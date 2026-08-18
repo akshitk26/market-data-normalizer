@@ -89,3 +89,11 @@ tasks.register<JavaExec>("benchmarkLocalFixPipeline") {
     mainClass.set("com.akshit.marketdata.ingestion.LocalFixPipelineBenchmarkApp")
     workingDir = rootProject.projectDir
 }
+
+tasks.register<JavaExec>("benchmarkCoinbasePipeline") {
+    group = "market data"
+    description = "Measure single-worker Coinbase JSON to normalized-event throughput without the FIX bridge."
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set("com.akshit.marketdata.ingestion.CoinbasePipelineBenchmarkApp")
+    workingDir = rootProject.projectDir
+}

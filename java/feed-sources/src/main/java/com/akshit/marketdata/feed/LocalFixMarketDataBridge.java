@@ -10,7 +10,9 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * A localhost FIX acceptor backed by real Coinbase public WebSocket data.
@@ -61,6 +63,12 @@ public final class LocalFixMarketDataBridge implements AutoCloseable {
                     throw new IOException("Local FIX bridge expected Market Data Request (35=V)");
                 }
                 String requestId = valueOrDefault(GeminiFixMessageCodec.field(request, 262), "local-1");
+                Set<String> requestedSymbols = new HashSet<>(GeminiFixMessageCodec.fields(request, 55));
+                Set<String> requestedEntryTypes = new HashSet<>(GeminiFixMessageCodec.fields(request, 269));
+                if (requestedEntryTypes.isEmpty()) {
+                    requestedEntryTypes.add("0");
+                    requestedEntryTypes.add("1");
+                }
                 startStream();
 
                 int emitted = 0;
@@ -74,9 +82,13 @@ public final class LocalFixMarketDataBridge implements AutoCloseable {
                         throw new IOException("Interrupted while reading Coinbase WebSocket", e);
                     }
                     if (json == null) {
-                        break;
+                        if (stream.isClosed()) {
+                            break;
+                        }
+                        continue;
                     }
-                    String fix = translator.translate(json, sequence, clientCompId, requestId);
+                    String fix = translator.translate(json, sequence, clientCompId, requestId,
+                            requestedSymbols, requestedEntryTypes);
                     if (fix == null) {
                         continue;
                     }

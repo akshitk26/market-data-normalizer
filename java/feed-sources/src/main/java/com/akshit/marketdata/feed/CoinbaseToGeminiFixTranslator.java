@@ -8,7 +8,9 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /** Converts real Coinbase level2 JSON into the Gemini FIX 4.4 market-data shape. */
 public final class CoinbaseToGeminiFixTranslator {
@@ -25,14 +27,20 @@ public final class CoinbaseToGeminiFixTranslator {
     }
 
     public String translate(String rawJson, long fixSequence, String targetCompId, String mdReqId) {
+        return translate(rawJson, fixSequence, targetCompId, mdReqId,
+                new HashSet<>(), new HashSet<>(List.of("0", "1")));
+    }
+
+    public String translate(String rawJson, long fixSequence, String targetCompId, String mdReqId,
+                             Set<String> requestedSymbols, Set<String> requestedEntryTypes) {
         try {
             JsonNode root = objectMapper.readTree(rawJson);
             String type = root.path("type").asText();
             if ("snapshot".equals(type)) {
-                return snapshot(root, fixSequence, targetCompId, mdReqId);
+                return snapshot(root, fixSequence, targetCompId, mdReqId, requestedSymbols, requestedEntryTypes);
             }
             if ("l2update".equals(type)) {
-                return incremental(root, fixSequence, targetCompId, mdReqId);
+                return incremental(root, fixSequence, targetCompId, mdReqId, requestedSymbols, requestedEntryTypes);
             }
             return null;
         } catch (IOException e) {
@@ -40,36 +48,63 @@ public final class CoinbaseToGeminiFixTranslator {
         }
     }
 
-    private String snapshot(JsonNode root, long sequence, String target, String requestId) {
+    private String snapshot(JsonNode root, long sequence, String target, String requestId,
+                            Set<String> requestedSymbols, Set<String> requestedEntryTypes) {
         List<String> fields = header("W", sequence, target, timestamp(root));
         String symbol = compactSymbol(required(root, "product_id"));
+        if (!requestedSymbols.isEmpty() && !requestedSymbols.contains(symbol)) {
+            return null;
+        }
         fields.add("55=" + symbol);
         fields.add("262=" + requestId);
         JsonNode bids = requiredArray(root, "bids");
         JsonNode asks = requiredArray(root, "asks");
-        fields.add("268=" + (bids.size() + asks.size()));
-        appendSnapshotLevels(fields, bids, "0");
-        appendSnapshotLevels(fields, asks, "1");
+        int count = (requestedEntryTypes.contains("0") ? bids.size() : 0)
+                + (requestedEntryTypes.contains("1") ? asks.size() : 0);
+        fields.add("268=" + count);
+        if (requestedEntryTypes.contains("0")) {
+            appendSnapshotLevels(fields, bids, "0");
+        }
+        if (requestedEntryTypes.contains("1")) {
+            appendSnapshotLevels(fields, asks, "1");
+        }
+        if (count == 0) {
+            return null;
+        }
         return GeminiFixMessageCodec.build(fields);
     }
 
-    private String incremental(JsonNode root, long sequence, String target, String requestId) {
+    private String incremental(JsonNode root, long sequence, String target, String requestId,
+                               Set<String> requestedSymbols, Set<String> requestedEntryTypes) {
+        String symbol = compactSymbol(required(root, "product_id"));
+        if (!requestedSymbols.isEmpty() && !requestedSymbols.contains(symbol)) {
+            return null;
+        }
         JsonNode changes = requiredArray(root, "changes");
         if (changes.isEmpty()) {
             return null;
         }
-        List<String> fields = header("X", sequence, target, timestamp(root));
-        fields.add("262=" + requestId);
-        fields.add("268=" + changes.size());
+        List<JsonNode> selected = new ArrayList<>();
         for (JsonNode change : changes) {
             if (!change.isArray() || change.size() != 3) {
                 throw new IllegalArgumentException("Coinbase change must be [side, price, size]");
             }
+            if (requestedEntryTypes.contains(sideCode(change.get(0).asText()))) {
+                selected.add(change);
+            }
+        }
+        if (selected.isEmpty()) {
+            return null;
+        }
+        List<String> fields = header("X", sequence, target, timestamp(root));
+        fields.add("262=" + requestId);
+        fields.add("268=" + selected.size());
+        for (JsonNode change : selected) {
             String side = change.get(0).asText();
             String action = isZero(change.get(2).asText()) ? "2" : "1";
             fields.add("279=" + action);
             fields.add("269=" + sideCode(side));
-            fields.add("55=" + compactSymbol(required(root, "product_id")));
+            fields.add("55=" + symbol);
             fields.add("270=" + change.get(1).asText());
             fields.add("271=" + change.get(2).asText());
         }
@@ -132,6 +167,6 @@ public final class CoinbaseToGeminiFixTranslator {
     }
 
     private static boolean isZero(String value) {
-        return new java.math.BigDecimal(value).signum() == 0;
+        return FixedPointDecimal.toNanos(value) == 0;
     }
 }

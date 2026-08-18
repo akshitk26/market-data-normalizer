@@ -11,6 +11,7 @@ import java.util.stream.Collectors;
 
 final class GeminiFixMessageCodec {
     static final char SOH = '\u0001';
+    private static final int MAX_FIELD_LENGTH = 1_000_000;
 
     private GeminiFixMessageCodec() {
     }
@@ -29,14 +30,22 @@ final class GeminiFixMessageCodec {
         if (beginString == null) {
             return null;
         }
+        if (!beginString.equals("8=FIX.4.4")) {
+            throw new IOException("Unsupported FIX BeginString: " + beginString);
+        }
         String bodyLengthField = readField(input);
         if (bodyLengthField == null || !bodyLengthField.startsWith("9=")) {
             throw new IOException("FIX message is missing tag 9 BodyLength");
         }
-        int bodyLength = Integer.parseInt(bodyLengthField.substring(2));
+        int bodyLength;
+        try {
+            bodyLength = Integer.parseInt(bodyLengthField.substring(2));
+        } catch (NumberFormatException e) {
+            throw new IOException("Invalid FIX BodyLength: " + bodyLengthField, e);
+        }
         byte[] body = readExactly(input, bodyLength);
         String checksum = readField(input);
-        if (checksum == null || !checksum.startsWith("10=")) {
+        if (checksum == null || !checksum.matches("10=\\d{3}")) {
             throw new IOException("FIX message is missing tag 10 CheckSum");
         }
         String messageWithoutChecksum = beginString + SOH + bodyLengthField + SOH
@@ -83,6 +92,9 @@ final class GeminiFixMessageCodec {
         while ((value = input.read()) >= 0) {
             if (value == SOH) {
                 return field.toString();
+            }
+            if (field.length() >= MAX_FIELD_LENGTH) {
+                throw new IOException("FIX field exceeds maximum length");
             }
             field.append((char) value);
         }

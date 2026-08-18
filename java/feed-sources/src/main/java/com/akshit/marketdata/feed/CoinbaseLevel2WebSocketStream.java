@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -18,7 +18,7 @@ public final class CoinbaseLevel2WebSocketStream implements AutoCloseable {
     private final URI uri;
     private final List<String> productIds;
     private final Duration connectTimeout;
-    private final LinkedBlockingQueue<String> messages = new LinkedBlockingQueue<>();
+    private final ArrayBlockingQueue<String> messages = new ArrayBlockingQueue<>(8_192);
     private final CompletableFuture<Void> closed = new CompletableFuture<>();
     private volatile Throwable failure;
     private volatile WebSocket webSocket;
@@ -58,6 +58,10 @@ public final class CoinbaseLevel2WebSocketStream implements AutoCloseable {
         return null;
     }
 
+    public boolean isClosed() {
+        return closed.isDone();
+    }
+
     @Override
     public void close() {
         WebSocket current = webSocket;
@@ -84,7 +88,12 @@ public final class CoinbaseLevel2WebSocketStream implements AutoCloseable {
         public CompletionStage<?> onText(WebSocket socket, CharSequence data, boolean last) {
             currentMessage.append(data);
             if (last) {
-                messages.offer(currentMessage.toString());
+                if (!messages.offer(currentMessage.toString())) {
+                    failure = new IllegalStateException("Coinbase WebSocket bridge queue is full");
+                    socket.abort();
+                    closed.complete(null);
+                    return null;
+                }
                 currentMessage.setLength(0);
             }
             socket.request(1);

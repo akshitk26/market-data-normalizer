@@ -19,6 +19,9 @@ public final class RingReplayBuffer implements ReplayBuffer {
 
     @Override
     public void append(MarketDataEnvelope event) {
+        if (event == null) {
+            throw new IllegalArgumentException("event must not be null");
+        }
         entries[writeIndex] = event;
         writeIndex = (writeIndex + 1) % entries.length;
         if (size < entries.length) {
@@ -28,9 +31,13 @@ public final class RingReplayBuffer implements ReplayBuffer {
 
     @Override
     public List<MarketDataEnvelope> replay(long fromSequenceInclusive, long toSequenceInclusive) {
+        if (fromSequenceInclusive > toSequenceInclusive) {
+            throw new IllegalArgumentException("fromSequenceInclusive must be <= toSequenceInclusive");
+        }
         List<MarketDataEnvelope> replayed = new ArrayList<>();
+        int oldestIndex = (writeIndex - size + entries.length) % entries.length;
         for (int i = 0; i < size; i++) {
-            MarketDataEnvelope event = entries[i];
+            MarketDataEnvelope event = entries[(oldestIndex + i) % entries.length];
             if (event == null) {
                 continue;
             }

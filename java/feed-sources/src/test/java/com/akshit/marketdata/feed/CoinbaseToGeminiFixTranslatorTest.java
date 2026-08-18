@@ -3,6 +3,7 @@ package com.akshit.marketdata.feed;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -46,5 +47,17 @@ final class CoinbaseToGeminiFixTranslatorTest {
     @Test
     void ignoresSubscriptionAcknowledgements() {
         assertNull(translator.translate("{\"type\":\"subscriptions\"}", 2, "LOCAL-CLIENT", "local-1"));
+    }
+
+    @Test
+    void appliesRequestedSymbolAndEntryTypeFilters() {
+        String json = "{\"type\":\"l2update\",\"product_id\":\"BTC-USD\","
+                + "\"changes\":[[\"buy\",\"100.10\",\"1\"],[\"sell\",\"100.20\",\"2\"]]}";
+
+        String fix = translator.translate(json, 4, "LOCAL-CLIENT", "local-3",
+                Set.of("BTCUSD"), Set.of("0"));
+
+        assertEquals("1", GeminiFixMessageCodec.field(fix, 268));
+        assertEquals(List.of("0"), GeminiFixMessageCodec.fields(fix, 269));
     }
 }

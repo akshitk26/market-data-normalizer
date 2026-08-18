@@ -11,7 +11,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 public final class CoinbaseLevel2WebSocketClient implements AutoCloseable {
@@ -22,7 +22,7 @@ public final class CoinbaseLevel2WebSocketClient implements AutoCloseable {
     private final List<String> productIds;
     private final int maxMessages;
     private final Duration timeout;
-    private final LinkedBlockingQueue<String> messages = new LinkedBlockingQueue<>();
+    private final ArrayBlockingQueue<String> messages;
     private final CountDownLatch done = new CountDownLatch(1);
     private volatile Throwable failure;
     private WebSocket webSocket;
@@ -50,6 +50,7 @@ public final class CoinbaseLevel2WebSocketClient implements AutoCloseable {
         this.productIds = new ArrayList<>(productIds);
         this.maxMessages = maxMessages;
         this.timeout = Objects.requireNonNull(timeout, "timeout");
+        this.messages = new ArrayBlockingQueue<>(maxMessages);
     }
 
     public List<String> capture() {
@@ -100,8 +101,11 @@ public final class CoinbaseLevel2WebSocketClient implements AutoCloseable {
         public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
             currentMessage.append(data);
             if (last) {
-                if (messages.size() < maxMessages) {
-                    messages.offer(currentMessage.toString());
+                if (!messages.offer(currentMessage.toString())) {
+                    failure = new IllegalStateException("Coinbase capture queue is full");
+                    done.countDown();
+                    webSocket.abort();
+                    return null;
                 }
                 currentMessage.setLength(0);
                 if (messages.size() >= maxMessages) {
